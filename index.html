@@ -111,7 +111,7 @@
   <div class="credits-wrap">
     <div class="h">About the Game</div>
     <p><b>"NXT BOT: Siddhanto Protocol"</b> is a fast-paced survival chase game set in an eerie open field filled with rogue meme spirits.
-    Stay alive, rack up your score, and watch out — every 1000 points triggers a boss that hunts you down for 30 terrifying seconds.</p>
+    Stay alive, rack up your score, and watch out — every 100 points triggers a boss that hunts you down for 30 terrifying seconds.</p>
 
     <div class="h">About the Developer</div>
     <p>Hey! I'm <b>Safin</b>, a 17-year-old game developer who loves creating and playing games.
@@ -286,7 +286,7 @@ const assets = {
     sky: 'images/background/s.png'
   }
 };
-// Changed to load all 20 spirit images (m1.png to m20.png)
+// Load all 20 spirit images (m1.png to m20.png)
 for (let i=1;i<=20;i++){
   const img = new Image();
   img.src = `images/spirits/m${i}.png`;
@@ -535,7 +535,7 @@ function update(dt){
   // Score + boss trigger
   scoreAcc += dt;
   if (scoreAcc >= 1){ score += 1; scoreAcc = 0; $('#scoreBox').textContent = `Score: ${score}`; }
-  if (!boss && score>0 && score % 1000 === 0){ spawnBoss(); }
+  if (!boss && score>0 && score % 100 === 0){ spawnBoss(); } // Changed from 1000 to 100
 }
 
 /* Game loop */
@@ -618,4 +618,3 @@ window.addEventListener('load', startSplash);
 </script>
 </body>
 </html>
-
