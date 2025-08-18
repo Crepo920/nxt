@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NXT BOT: Siddhanto Protocol</title>
+<style>
+  :root{
+    --fg:#e8e8f0; --muted:#8da0b3; --bg:#0b0f14; --bg2:#0e141b;
+    --accent:#00ffd1; --accent2:#ff2e88; --warn:#ffd400;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+  button{border:0;border-radius:14px;padding:14px 20px;font-weight:700;cursor:pointer}
+  .hidden{display:none !important;}
+  .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  img {max-width:100%;}
+
+  /* HOME (unchanged) */
+  #home{background:url('images/hbg.png') center/cover no-repeat;}
+  .home-wrap{backdrop-filter: blur(3px); background: rgba(10,14,20,.35); border:1px solid rgba(0,255,209,.2); border-radius:24px; padding:24px; width:min(520px,92%); box-shadow: 0 10px 40px rgba(0,0,0,.45);}
+  .title{font-size:28px; text-align:center; font-weight:900; line-height:1.2; text-transform:uppercase; letter-spacing:1px}
+  .title .accent{color:var(--accent)}
+  .subtitle{margin-top:6px; text-align:center; color:var(--muted); font-size:13px}
+  .menu{display:flex; flex-direction:column; gap:12px; margin-top:18px}
+  .btn{width:100%; color:#041218; background:linear-gradient(135deg,var(--accent),#88ffe7); box-shadow:0 8px 20px rgba(0,255,209,.25)}
+  .btn.secondary{color:#071018; background:linear-gradient(135deg,#62a0ff,#b3d3ff)}
+  .btn.danger{color:#18040a; background:linear-gradient(135deg,#ff5da8,#ffc2dc)}
+  .foot{margin-top:8px; text-align:center; font-size:12px; color:var(--muted)}
+
+  /* SETTINGS / CREDITS / LOADING / GAME styles */
+  #settings{background:linear-gradient(180deg,var(--bg),var(--bg2)); padding:24px}
+  .panel{width:min(700px,96%); background:#0c1218; border-radius:20px; padding:18px;}
+  .row{display:flex; justify-content:space-between; align-items:center; padding:10px 6px; border-bottom:1px dashed rgba(255,255,255,.06)}
+  .toggle{appearance:none; width:54px; height:30px; border-radius:30px; background:#22313f; position:relative; outline:0; cursor:pointer; transition:.2s}
+  .toggle:checked{background:linear-gradient(135deg,var(--accent),#5dffe7)}
+  .toggle::after{content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; transition:.2s}
+  .toggle:checked::after{left:27px}
+
+  #credits{background:#000; color:#fff; padding:20px; overflow:auto}
+  .credits-wrap{width:min(800px,94%); margin:40px auto; line-height:1.6}
+  .h{color:#ff3b3b; font-weight:900; margin:18px 0 8px; text-transform:uppercase}
+
+  #loading{background:#000; z-index:45; display:flex; align-items:center; justify-content:center; position:fixed}
+  .load-wrap{position:relative; width:100%; height:100%}
+  .load-img{position:absolute; inset:0; object-fit:cover; width:100%; height:100%; opacity:0; transition:opacity .8s ease}
+  .load-img.active{opacity:1}
+  .san-logo{position:absolute; bottom:24px; left:24px; width:min(42vw,240px); opacity:.95}
+  .progress{position:absolute; bottom:24px; left:24px; right:24px; height:10px; border-radius:10px; background:#1a2430; overflow:hidden}
+  .progress>i{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .35s ease}
+
+  #cut{background:#000; z-index:44}
+
+  #game{background:#000; z-index:20}
+  canvas{display:block; width:100vw; height:100vh}
+  .hud{position:fixed; inset:0; pointer-events:none}
+  .score{position:absolute; top:12px; left:12px; background:rgba(0,0,0,.45); border-radius:12px; padding:8px 12px; font-weight:800}
+  .topbar{position:absolute; top:12px; right:12px; display:flex; gap:8px; pointer-events:auto}
+  .mini{padding:10px 14px; font-size:14px; border-radius:12px; color:#051216; background:linear-gradient(135deg,#8fd7ff,#cfeaff)}
+  .bossbar{position:absolute; top:54px; left:50%; transform:translateX(-50%); width:min(92vw,600px); height:12px; background:#1a2430; border-radius:12px; overflow:hidden; display:none}
+  .bossbar>i{display:block; height:100%; width:100%; background:linear-gradient(90deg,#ff6262,#ffa062)}
+
+  #gameover{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.7); z-index:60; text-align:center; padding:20px}
+  .go-card{background:#0c1218; border-radius:20px; padding:24px; width:min(520px,94%)}
+  .go-title{font-weight:900; color:var(--warn); text-transform:uppercase; font-size:28px; letter-spacing:1px}
+
+  /* Splash small fade */
+  #splash.fadeout{animation: fadeout .8s ease forwards}
+  @keyframes fadeout { to{ opacity:0; visibility:hidden } }
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<section id="splash" class="screen">
+  <img src="images/loading/crepo_logo.png" alt="Crepo" style="width:min(70vw,360px)" />
+</section>
+
+<!-- HOME -->
+<section id="home" class="screen hidden">
+  <div class="home-wrap">
+    <div class="title">NXT BOT <span class="accent">Siddhanto Protocol</span></div>
+    <div class="subtitle">Futuristic survival • Retro 2.5D vibe</div>
+    <div class="menu">
+      <button id="playBtn" class="btn">Play</button>
+      <button id="settingsBtn" class="btn secondary">Settings</button>
+      <button id="creditsBtn" class="btn danger">Credits</button>
+    </div>
+    <div class="foot">Best experienced in full-screen • Headphones recommended</div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section id="settings" class="screen hidden">
+  <div class="panel">
+    <h3 style="margin:0 0 10px">Settings</h3>
+    <div class="row"><span>Home Music (hbg.mp3)</span><input id="tgHome" type="checkbox" class="toggle" /></div>
+    <div class="row"><span>Gameplay Music (playbg.mp3)</span><input id="tgPlay" type="checkbox" class="toggle" /></div>
+    <div class="row"><span>Boss Music (boss.mp3)</span><input id="tgBoss" type="checkbox" class="toggle" /></div>
+    <div class="row"><span>Chase Sound (cs.mp3)</span><input id="tgChase" type="checkbox" class="toggle" /></div>
+    <div class="row"><span>FX: Death/Steps/GameOver</span><input id="tgFX" type="checkbox" class="toggle" /></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button id="backHome1" class="btn secondary" style="flex:1">Back</button>
+      <button id="resetSettings" class="btn danger" style="flex:1">Reset</button>
+    </div>
+  </div>
+</section>
+
+<!-- CREDITS -->
+<section id="credits" class="screen hidden">
+  <div class="credits-wrap">
+    <div class="h">About the Game</div>
+    <p><b>"NXT BOT: Siddhanto Protocol"</b> is a fast-paced survival chase game set in an eerie open field filled with rogue meme spirits.
+    Stay alive, rack up your score, and watch out — every 1000 points triggers a boss that hunts you down for 30 terrifying seconds.</p>
+
+    <div class="h">About the Developer</div>
+    <p>Hey! I'm <b>Safin</b>, a 17-year-old game developer who loves creating and playing games.
+    My favorite game is Minecraft, and I enjoy making creative or story-driven games.</p>
+
+    <div class="h">Contact Me</div>
+    <p>Facebook: <a href="https://www.facebook.com/shahariarkabir.shafin.5" target="_blank">Shahariar Kabir Shafin</a><br>
+       Instagram: <a href="https://www.instagram.com/_kabir_safin/" target="_blank">@_kabir_safin</a></p>
+
+    <div class="h">Special Thanks</div>
+    <p>Thanks to everyone who supported this game, tested it, or gave feedback.</p>
+
+    <div class="h">High Score Hall</div>
+    <div id="hsBlock">No high score yet.</div>
+
+    <div style="margin-top:16px">
+      <button id="backHome2" class="btn secondary">Back</button>
+    </div>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section id="loading" class="screen hidden">
+  <div class="load-wrap">
+    <img class="load-img" id="ld1" src="images/loading/loading1.png" alt="">
+    <img class="load-img" id="ld2" src="images/loading/loading2.png" alt="">
+    <img class="load-img" id="ld3" src="images/loading/loading3.png" alt="">
+    <img class="load-img" id="ld4" src="images/loading/loading4.png" alt="">
+    <img class="load-img" id="ld5" src="images/loading/loading5.png" alt="">
+    <img class="san-logo" src="images/loading/san.png" alt="">
+    <div class="progress"><i id="pg"></i></div>
+  </div>
+</section>
+
+<!-- CUT -->
+<section id="cut" class="screen hidden"></section>
+
+<!-- GAME -->
+<section id="game" class="screen hidden">
+  <canvas id="game-canvas"></canvas>
+  <div class="hud">
+    <div class="score" id="scoreBox">Score: 0</div>
+    <div class="topbar">
+      <button id="pauseBtn" class="mini">Pause</button>
+      <button id="exitBtn" class="mini secondary">Home</button>
+    </div>
+    <div class="bossbar" id="bossBar"><i id="bossFill"></i></div>
+  </div>
+</section>
+
+<!-- GAMEOVER -->
+<section id="gameover" class="screen">
+  <div class="go-card">
+    <div class="go-title">Game Over</div>
+    <div class="go-meta" id="goMeta">Score: 0</div>
+    <div style="display:flex;gap:10px;margin-top:12px;justify-content:center">
+      <button id="againBtn" class="btn">Play Again</button>
+      <button id="homeBtn" class="btn secondary">Home</button>
+    </div>
+  </div>
+</section>
+
+<!-- AUDIO -->
+<audio id="aHome" src="audio/hbg.mp3" loop></audio>
+<audio id="aPlay" src="audio/playbg.mp3" loop></audio>
+<audio id="aBoss" src="audio/boss.mp3" loop></audio>
+<audio id="aChase" src="audio/cs.mp3"></audio>
+<audio id="aSan"  src="audio/san.mp3"></audio>
+<audio id="sDeath" src="sounds/ahh.mp3"></audio>
+<audio id="sGO"    src="sounds/go.mp3"></audio>
+<audio id="sWalk"  src="sounds/walk.mp3" loop></audio>
+
+<!-- Three.js (for open field map) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+/* ===================== UI + AUDIO (unchanged visuals) ===================== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const screens = {
+  splash: $('#splash'), home: $('#home'), settings: $('#settings'),
+  credits: $('#credits'), loading: $('#loading'), cut: $('#cut'),
+  game: $('#game'), over: $('#gameover')
+};
+const audio = {
+  home: $('#aHome'), play: $('#aPlay'), boss: $('#aBoss'),
+  chase: $('#aChase'), san: $('#aSan'),
+  death: $('#sDeath'), go: $('#sGO'), walk: $('#sWalk')
+};
+const toggles = { home: $('#tgHome'), play: $('#tgPlay'), boss: $('#tgBoss'), chase: $('#tgChase'), fx: $('#tgFX') };
+
+function tryPlay(a, allow){ if (!allow) return; a.play().catch(()=>{}); }
+function tryPause(a){ try{ a.pause(); }catch(e){} }
+
+function applyMusicState(){
+  if (!screens.home.classList.contains('hidden')){
+    if (toggles.home.checked) tryPlay(audio.home, true);
+    tryPause(audio.play); tryPause(audio.boss);
+  } else if (!screens.game.classList.contains('hidden')){
+    tryPause(audio.home);
+    if (!boss && toggles.play.checked) tryPlay(audio.play, true);
+  } else {
+    tryPause(audio.home); tryPause(audio.play); tryPause(audio.boss);
+  }
+}
+
+const LS_SETTINGS = 'nxt_settings_v1';
+const LS_HS = 'nxt_highscore_v1';
+function loadSettings(){
+  const d = JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}');
+  toggles.home.checked = d.home ?? true;
+  toggles.play.checked = d.play ?? true;
+  toggles.boss.checked = d.boss ?? true;
+  toggles.chase.checked = d.chase ?? true;
+  toggles.fx.checked = d.fx ?? true;
+}
+function saveSettings(){
+  const d = { home: toggles.home.checked, play: toggles.play.checked, boss: toggles.boss.checked, chase: toggles.chase.checked, fx: toggles.fx.checked };
+  localStorage.setItem(LS_SETTINGS, JSON.stringify(d));
+}
+$$('.toggle').forEach(t => t.addEventListener('change', saveSettings));
+$('#resetSettings').addEventListener('click', ()=>{ localStorage.removeItem(LS_SETTINGS); loadSettings(); applyMusicState(); });
+
+function getHS(){ return JSON.parse(localStorage.getItem(LS_HS) || '{"name":"","score":0}'); }
+function setHS(name, score){ localStorage.setItem(LS_HS, JSON.stringify({name,score})); }
+function updateHSBlock(){ const h = getHS(); $('#hsBlock').textContent = h.score>0 ? `${h.name} — ${h.score}` : 'No high score yet.'; }
+
+function show(name){
+  Object.values(screens).forEach(s => s.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+  applyMusicState();
+}
+function startSplash(){
+  show('splash');
+  setTimeout(()=>{ screens.splash.classList.add('fadeout'); setTimeout(()=>show('home'), 800); if (toggles.home.checked) tryPlay(audio.home, true); }, 3000);
+}
+
+/* Loading (show all 5) */
+const loadImgs = [$('#ld1'),$('#ld2'),$('#ld3'),$('#ld4'),$('#ld5')];
+let loadIdx=0, slideTimer=null, progTimer=null;
+function startLoading(){
+  tryPause(audio.home);
+  if (toggles.play.checked) { audio.san.currentTime = 0; tryPlay(audio.san, true); }
+  show('loading');
+  loadImgs.forEach(i=>i.classList.remove('active'));
+  loadIdx = 0; loadImgs[0].classList.add('active');
+  const displayMs = 1400, totalMs = displayMs * loadImgs.length + 800;
+  slideTimer = setInterval(()=>{
+    loadImgs[loadIdx].classList.remove('active');
+    loadIdx = (loadIdx+1)%loadImgs.length;
+    loadImgs[loadIdx].classList.add('active');
+  }, displayMs);
+  const start = performance.now();
+  progTimer = setInterval(()=>{
+    const t = performance.now() - start;
+    $('#pg').style.width = Math.min(100, (t/totalMs)*100) + '%';
+    if (t >= totalMs){
+      clearInterval(slideTimer); clearInterval(progTimer);
+      tryPause(audio.san);
+      show('cut');
+      setTimeout(()=>{ show('game'); startGame(); }, 1000);
+    }
+  }, 120);
+}
+
+/* ===================== Assets ===================== */
+const assets = {
+  spirits: [],
+  textures: {
+    wall: 'images/wall.png',
+    ground: 'images/background/g.png',
+    sky: 'images/background/s.png'
+  }
+};
+// Changed to load all 20 spirit images (m1.png to m20.png)
+for (let i=1;i<=20;i++){
+  const img = new Image();
+  img.src = `images/spirits/m${i}.png`;
+  img.onerror = ()=>console.warn('Missing spirit image: m'+i+'.png');
+  assets.spirits.push(`images/spirits/m${i}.png`);
+}
+
+/* ===================== Three.js Open Field Gameplay ===================== */
+const canvas = $('#game-canvas');
+let renderer, scene, camera, player;
+let ground, sky, walls = [];
+let spirits = []; // {mesh, speed}
+let boss = null, bossTTL = 0;
+
+const WORLD = { half:100, wallH:5, wallT:1 }; // 200x200 area, like your sample
+const SPEED = { walk: 6.5, run: 10.5, spiritMin: 2.5, spiritMax: 4.5, boss: 7.5 }; // Increased spirit speeds
+const SPAWN = { delay: 10, max: 20, every: 0.8 }; // Now spawns up to 20 spirits, slightly faster spawn rate
+const PLAYER = { radius: 1.0, height: 1.8 };
+
+let running=false, lastT=0, startDelay=SPAWN.delay, spawnAcc=0, score=0, scoreAcc=0;
+
+/* Input */
+const keys = {};
+window.addEventListener('keydown', (e)=>{ keys[e.code]=true; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); if(e.code==='ControlLeft' || e.code==='ControlRight'){ if (document.pointerLockElement!==canvas) canvas.requestPointerLock?.(); }});
+window.addEventListener('keyup', (e)=>{ keys[e.code]=false; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+document.addEventListener('pointerlockchange', ()=>{
+  if(document.pointerLockElement===canvas) document.addEventListener('mousemove', onMouseMove);
+  else document.removeEventListener('mousemove', onMouseMove);
+});
+let yaw=0, pitch=0;
+function onMouseMove(e){
+  yaw   -= e.movementX * 0.0026;           // look left/right
+  pitch -= e.movementY * 0.0022;           // look up/down (no bob)
+  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  player.rotation.y = yaw;
+  camera.rotation.x = pitch;
+}
+
+/* Build scene like your example: ground plane + sky sphere + 4 border walls + flat billboard sprites */
+function buildScene(){
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1200);
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  player = new THREE.Object3D();
+  scene.add(player);
+  camera.position.set(0, PLAYER.height, 0);
+  player.add(camera);
+
+  // Ground
+  const gTex = new THREE.TextureLoader().load(assets.textures.ground);
+  gTex.wrapS = gTex.wrapT = THREE.RepeatWrapping; gTex.repeat.set(20,20);
+  ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(WORLD.half*2, WORLD.half*2),
+    new THREE.MeshBasicMaterial({ map: gTex })
+  );
+  ground.rotation.x = -Math.PI/2;
+  scene.add(ground);
+
+  // Sky
+  const sTex = new THREE.TextureLoader().load(assets.textures.sky);
+  sky = new THREE.Mesh(
+    new THREE.SphereGeometry(500,32,32),
+    new THREE.MeshBasicMaterial({ map: sTex, side: THREE.BackSide })
+  );
+  scene.add(sky);
+
+  // Walls at borders (like sample)
+  const wTex = new THREE.TextureLoader().load(assets.textures.wall);
+  const wMat = new THREE.MeshBasicMaterial({ map: wTex });
+  const north = new THREE.Mesh(new THREE.BoxGeometry(WORLD.half*2, WORLD.wallH, WORLD.wallT), wMat); north.position.set(0, WORLD.wallH/2, -WORLD.half); scene.add(north);
+  const south = north.clone(); south.position.z = WORLD.half; scene.add(south);
+  const west  = new THREE.Mesh(new THREE.BoxGeometry(WORLD.wallT, WORLD.wallH, WORLD.half*2), wMat); west.position.set(-WORLD.half, WORLD.wallH/2, 0); scene.add(west);
+  const east  = west.clone(); east.position.x = WORLD.half; scene.add(east);
+  walls = [north,south,west,east];
+
+  // Initial spirits (optional: spawn after delay; we'll start with none so it matches "spawn after 10s")
+  spirits = [];
+
+  // Resize
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+/* Helpers */
+function clampToField(v){
+  const m = WORLD.half - 2.0; // margin so you don't clip walls
+  v.x = Math.max(-m, Math.min(m, v.x));
+  v.z = Math.max(-m, Math.min(m, v.z));
+}
+function forwardVec(){
+  const dir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(0, player.rotation.y, 0));
+  return dir.normalize();
+}
+function rightVec(){
+  const dir = new THREE.Vector3(1,0,0).applyEuler(new THREE.Euler(0, player.rotation.y, 0));
+  return dir.normalize();
+}
+
+/* Spirit factory - now creates thicker, more visible spirits */
+function makeSpirit(){
+  const idx = Math.floor(Math.random()*assets.spirits.length);
+  const tex = new THREE.TextureLoader().load(assets.spirits[idx]);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: true, alphaTest: 0.1 });
+  
+  // Create a thicker spirit using a BoxGeometry instead of PlaneGeometry
+  const geo = new THREE.BoxGeometry(1.8, 1.8, 0.4); // Wider and thicker than before
+  const mesh = new THREE.Mesh(geo, mat);
+  
+  // Position randomly in the field
+  mesh.position.set(
+    (Math.random()*2-1)*(WORLD.half-10), 
+    1.1, 
+    (Math.random()*2-1)*(WORLD.half-10)
+  );
+  
+  // Random speed within the increased range
+  const speed = SPEED.spiritMin + Math.random()*(SPEED.spiritMax - SPEED.spiritMin);
+  scene.add(mesh);
+  return { mesh, speed };
+}
+
+/* Separation so spirits don't overlap */
+function separateSpirits(){
+  const minDist = 2.0; // Slightly increased minimum distance
+  for (let i=0;i<spirits.length;i++){
+    for (let j=i+1;j<spirits.length;j++){
+      const a = spirits[i].mesh.position, b = spirits[j].mesh.position;
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const d2 = dx*dx + dz*dz;
+      if (d2 > 0 && d2 < minDist*minDist){
+        const d = Math.sqrt(d2);
+        const push = (minDist - d) * 0.5;
+        const nx = dx / d, nz = dz / d;
+        a.x -= nx * push; a.z -= nz * push;
+        b.x += nx * push; b.z += nz * push;
+      }
+    }
+  }
+}
+
+/* Boss (kept same mechanic but slightly faster) */
+function spawnBoss(){
+  const tex = new THREE.TextureLoader().load('images/spirits/boss.png', undefined, undefined, ()=>console.warn('Missing boss.png'));
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+  // Make boss thicker too
+  const geo = new THREE.BoxGeometry(4,4,0.6); 
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set((Math.random()*2-1)*(WORLD.half-20), 2, (Math.random()*2-1)*(WORLD.half-20));
+  scene.add(mesh);
+  boss = { mesh, speed: SPEED.boss };
+  bossTTL = 30;
+  tryPause(audio.play);
+  if (toggles.boss.checked){ audio.boss.currentTime=0; tryPlay(audio.boss, true); }
+  $('#bossBar').style.display = 'block';
+}
+
+/* Movement + AI + scoring */
+function update(dt){
+  // Movement (WASD) — relative to look
+  let moving = false;
+  const accel = new THREE.Vector3();
+  const fwd = forwardVec(), right = rightVec();
+  const speed = (keys['ShiftLeft'] || keys['ShiftRight']) ? SPEED.run : SPEED.walk;
+
+  if (keys['KeyW']) { accel.add(fwd); moving = true; }
+  if (keys['KeyS']) { accel.addScaledVector(fwd, -1); moving = true; }
+  if (keys['KeyA']) { accel.addScaledVector(right, -1); moving = true; }
+  if (keys['KeyD']) { accel.add(right); moving = true; }
+
+  if (moving){
+    accel.normalize().multiplyScalar(speed * dt);
+    player.position.add(accel);
+    clampToField(player.position);
+    if (toggles.fx.checked) tryPlay(audio.walk, true);
+  } else {
+    audio.walk.pause();
+  }
+
+  // Spawn logic (start after 10s)
+  if (startDelay > 0){
+    startDelay -= dt;
+  } else {
+    spawnAcc += dt;
+    // Spawn spirits gradually until we reach the max (now 20)
+    if (spawnAcc >= SPAWN.every && spirits.length < SPAWN.max){
+      spawnAcc = 0; 
+      spirits.push(makeSpirit());
+    }
+  }
+
+  // Spirits chase + face camera
+  let anyNear = false;
+  const p = player.position;
+  for (const s of spirits){
+    const pos = s.mesh.position;
+    
+    // Make spirits face the player (but keep their thickness visible)
+    s.mesh.lookAt(new THREE.Vector3(p.x, pos.y, p.z));
+    
+    const dx = p.x - pos.x, dz = p.z - pos.z;
+    const dist = Math.hypot(dx, dz) || 0.0001;
+    const step = (s.speed * dt);
+    pos.x += (dx/dist) * step;
+    pos.z += (dz/dist) * step;
+    clampToField(pos);
+    if (dist < 2.5) anyNear = true; // Slightly increased near distance
+    
+    // hit player? (using the thicker collision detection)
+    if (dist < (PLAYER.radius + 1.2)) { onGameOver(); return; }
+  }
+  separateSpirits();
+
+  // Boss chase
+  if (boss){
+    const b = boss.mesh.position;
+    boss.mesh.lookAt(new THREE.Vector3(p.x, b.y, p.z)); // Make boss face player but maintain height
+    
+    const dx = p.x - b.x, dz = p.z - b.z;
+    const dist = Math.hypot(dx, dz) || 0.0001;
+    const step = boss.speed * dt;
+    b.x += (dx/dist) * step; b.z += (dz/dist) * step;
+    clampToField(b);
+    if (dist < (PLAYER.radius + 2.0)) { onGameOver(); return; } // Slightly larger boss hit radius
+    bossTTL -= dt;
+    $('#bossFill').style.width = Math.max(0,(bossTTL/30)*100) + '%';
+    if (bossTTL <= 0){
+      scene.remove(boss.mesh); boss = null;
+      $('#bossBar').style.display = 'none';
+      tryPause(audio.boss);
+      if (toggles.play.checked) tryPlay(audio.play, true);
+    }
+  }
+
+  // Chase SFX
+  if (anyNear && toggles.chase.checked){
+    if (audio.chase.paused){ audio.chase.currentTime=0; tryPlay(audio.chase, true); }
+  } else { audio.chase.pause(); audio.chase.currentTime=0; }
+
+  // Score + boss trigger
+  scoreAcc += dt;
+  if (scoreAcc >= 1){ score += 1; scoreAcc = 0; $('#scoreBox').textContent = `Score: ${score}`; }
+  if (!boss && score>0 && score % 1000 === 0){ spawnBoss(); }
+}
+
+/* Game loop */
+function animate(ts){
+  if (!running) return;
+  const dt = Math.min(0.05, (ts - lastT)/1000 || 0);
+  lastT = ts;
+
+  update(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+/* Start / Stop */
+function startGame(){
+  // init
+  buildScene();
+  spirits = [];
+  boss = null; bossTTL = 0;
+  startDelay = SPAWN.delay; spawnAcc = 0;
+  score = 0; scoreAcc = 0;
+  player.position.set(0, 0, 0);
+  yaw = 0; pitch = 0; player.rotation.set(0,0,0); camera.rotation.set(0,0,0);
+
+  running = true;
+  lastT = performance.now();
+  if (toggles.play.checked){ audio.play.currentTime=0; tryPlay(audio.play, true); }
+  requestAnimationFrame(animate);
+}
+
+function stopGame(){
+  running = false;
+  // clean pointer lock if any
+  if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+  tryPause(audio.play); tryPause(audio.boss); audio.chase.pause(); audio.walk.pause();
+  // dispose scene to free GPU
+  try{
+    renderer.dispose();
+    scene.traverse(o=>{
+      if (o.geometry) o.geometry.dispose?.();
+      if (o.material){
+        if (Array.isArray(o.material)) o.material.forEach(m=>m.map?.dispose?.());
+        else { o.material.map?.dispose?.(); o.material.dispose?.(); }
+      }
+    });
+  }catch(e){}
+}
+
+/* Game Over */
+function onGameOver(){
+  stopGame();
+  if (toggles.fx.checked){
+    audio.go.currentTime=0; tryPlay(audio.go, true);
+    audio.death.currentTime=0; tryPlay(audio.death, true);
+  }
+  const prev = getHS();
+  if (score > prev.score){
+    let name = prompt('New High Score! Enter your name:', prev.name || 'Player');
+    if (!name) name = 'Player';
+    setHS(name, score);
+  }
+  $('#goMeta').textContent = `Score: ${score}`;
+  $('#gameover').style.display = 'flex';
+}
+
+/* UI Bindings */
+$('#playBtn').addEventListener('click', startLoading);
+$('#settingsBtn').addEventListener('click', ()=> show('settings'));
+$('#creditsBtn').addEventListener('click', ()=> { updateHSBlock(); show('credits'); });
+$('#backHome1').addEventListener('click', ()=> show('home'));
+$('#backHome2').addEventListener('click', ()=> show('home'));
+$('#againBtn').addEventListener('click', ()=>{ $('#gameover').style.display='none'; show('loading'); startLoading(); });
+$('#homeBtn').addEventListener('click', ()=>{ $('#gameover').style.display='none'; stopGame(); show('home'); });
+$('#exitBtn').addEventListener('click', ()=>{ stopGame(); show('home'); });
+$('#pauseBtn').addEventListener('click', ()=> alert('Game paused. Tap OK to resume.'));
+
+loadSettings();
+updateHSBlock();
+window.addEventListener('load', startSplash);
+</script>
+</body>
+</html>
+
