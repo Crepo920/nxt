@@ -16,7 +16,7 @@
   .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
   img {max-width:100%;}
 
-  /* HOME (unchanged) */
+  /* HOME */
   #home{background:url('images/hbg.png') center/cover no-repeat;}
   .home-wrap{backdrop-filter: blur(3px); background: rgba(10,14,20,.35); border:1px solid rgba(0,255,209,.2); border-radius:24px; padding:24px; width:min(520px,92%); box-shadow: 0 10px 40px rgba(0,0,0,.45);}
   .title{font-size:28px; text-align:center; font-weight:900; line-height:1.2; text-transform:uppercase; letter-spacing:1px}
@@ -63,6 +63,13 @@
   #gameover{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.7); z-index:60; text-align:center; padding:20px}
   .go-card{background:#0c1218; border-radius:20px; padding:24px; width:min(520px,94%)}
   .go-title{font-weight:900; color:var(--warn); text-transform:uppercase; font-size:28px; letter-spacing:1px}
+
+  /* Mobile Controls */
+  .mobile-controls{position:fixed; bottom:20px; left:0; right:0; display:none; justify-content:space-between; padding:0 20px; z-index:30; pointer-events:none}
+  .joystick-area{width:120px; height:120px; position:relative; pointer-events:auto}
+  .joystick{width:60px; height:60px; background:rgba(255,255,255,0.3); border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none}
+  .look-area{width:50%; height:200px; position:absolute; right:0; pointer-events:auto}
+  .run-btn{width:80px; height:80px; background:rgba(255,255,255,0.3); border-radius:50%; position:absolute; right:20px; bottom:140px; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; pointer-events:auto}
 
   /* Splash small fade */
   #splash.fadeout{animation: fadeout .8s ease forwards}
@@ -160,6 +167,14 @@
     </div>
     <div class="bossbar" id="bossBar"><i id="bossFill"></i></div>
   </div>
+  <!-- Mobile Controls -->
+  <div class="mobile-controls" id="mobileControls">
+    <div class="joystick-area" id="joystickArea">
+      <div class="joystick" id="joystick"></div>
+    </div>
+    <div class="look-area" id="lookArea"></div>
+    <div class="run-btn" id="runBtn">RUN</div>
+  </div>
 </section>
 
 <!-- GAMEOVER -->
@@ -184,11 +199,11 @@
 <audio id="sGO"    src="sounds/go.mp3"></audio>
 <audio id="sWalk"  src="sounds/walk.mp3" loop></audio>
 
-<!-- Three.js (for open field map) -->
+<!-- Three.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-/* ===================== UI + AUDIO (unchanged visuals) ===================== */
+/* ===================== UI + AUDIO ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const screens = {
@@ -298,20 +313,131 @@ for (let i=1;i<=20;i++){
 const canvas = $('#game-canvas');
 let renderer, scene, camera, player;
 let ground, sky, walls = [];
-let spirits = []; // {mesh, speed}
+let spirits = []; // {mesh, speed, spawnTime}
 let boss = null, bossTTL = 0;
 
-const WORLD = { half:100, wallH:5, wallT:1 }; // 200x200 area, like your sample
-const SPEED = { walk: 6.5, run: 10.5, spiritMin: 2.5, spiritMax: 4.5, boss: 7.5 }; // Increased spirit speeds
-const SPAWN = { delay: 10, max: 20, every: 0.8 }; // Now spawns up to 20 spirits, slightly faster spawn rate
+const WORLD = { half:100, wallH:5, wallT:1 };
+const SPEED = { 
+  walk: 6.5, 
+  run: 10.5, 
+  spiritMin: 2.5, 
+  spiritMax: 4.5, 
+  boss: 4.5 // Reduced boss speed
+};
+const SPAWN = { 
+  delay: 10, 
+  max: 20, 
+  every: 0.8, 
+  despawnMin: 45, // Increased despawn time
+  despawnMax: 50  // Increased despawn time
+};
 const PLAYER = { radius: 1.0, height: 1.8 };
 
 let running=false, lastT=0, startDelay=SPAWN.delay, spawnAcc=0, score=0, scoreAcc=0;
 
+/* Mobile Controls */
+let joystickActive = false;
+let joystickPos = {x:0, y:0};
+let joystickStart = {x:0, y:0};
+let lookActive = false;
+let lookStart = {x:0, y:0};
+let isRunning = false;
+
+function setupMobileControls(){
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if(isMobile){
+    $('#mobileControls').style.display = 'flex';
+    
+    // Joystick for movement
+    $('#joystickArea').addEventListener('touchstart', (e)=>{
+      joystickActive = true;
+      const rect = e.target.getBoundingClientRect();
+      joystickStart = {x: rect.left + rect.width/2, y: rect.top + rect.height/2};
+      e.preventDefault();
+    });
+    
+    document.addEventListener('touchmove', (e)=>{
+      if(joystickActive){
+        const touch = e.touches[0];
+        joystickPos = {
+          x: touch.clientX - joystickStart.x,
+          y: touch.clientY - joystickStart.y
+        };
+        // Limit joystick movement
+        const dist = Math.sqrt(joystickPos.x*joystickPos.x + joystickPos.y*joystickPos.y);
+        const maxDist = 50;
+        if(dist > maxDist){
+          joystickPos.x = joystickPos.x * maxDist / dist;
+          joystickPos.y = joystickPos.y * maxDist / dist;
+        }
+        $('#joystick').style.transform = `translate(calc(-50% + ${joystickPos.x}px), calc(-50% + ${joystickPos.y}px)`;
+        e.preventDefault();
+      }
+    });
+    
+    document.addEventListener('touchend', (e)=>{
+      if(joystickActive){
+        joystickActive = false;
+        joystickPos = {x:0, y:0};
+        $('#joystick').style.transform = 'translate(-50%, -50%)';
+      }
+    });
+    
+    // Look controls
+    $('#lookArea').addEventListener('touchstart', (e)=>{
+      lookActive = true;
+      lookStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+      e.preventDefault();
+    });
+    
+    document.addEventListener('touchmove', (e)=>{
+      if(lookActive && e.touches.length > 0){
+        const touch = e.touches[0];
+        const dx = touch.clientX - lookStart.x;
+        const dy = touch.clientY - lookStart.y;
+        
+        // Update camera rotation
+        yaw -= dx * 0.002;
+        pitch -= dy * 0.002;
+        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+        player.rotation.y = yaw;
+        camera.rotation.x = pitch;
+        
+        lookStart = {x: touch.clientX, y: touch.clientY};
+        e.preventDefault();
+      }
+    });
+    
+    document.addEventListener('touchend', (e)=>{
+      lookActive = false;
+    });
+    
+    // Run button
+    $('#runBtn').addEventListener('touchstart', (e)=>{
+      isRunning = true;
+      e.preventDefault();
+    });
+    
+    $('#runBtn').addEventListener('touchend', (e)=>{
+      isRunning = false;
+      e.preventDefault();
+    });
+  }
+}
+
 /* Input */
 const keys = {};
-window.addEventListener('keydown', (e)=>{ keys[e.code]=true; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); if(e.code==='ControlLeft' || e.code==='ControlRight'){ if (document.pointerLockElement!==canvas) canvas.requestPointerLock?.(); }});
-window.addEventListener('keyup', (e)=>{ keys[e.code]=false; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+window.addEventListener('keydown', (e)=>{ 
+  keys[e.code]=true; 
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); 
+  if(e.code==='ControlLeft' || e.code==='ControlRight'){ 
+    if (document.pointerLockElement!==canvas) canvas.requestPointerLock?.(); 
+  }
+});
+window.addEventListener('keyup', (e)=>{ 
+  keys[e.code]=false; 
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); 
+});
 document.addEventListener('pointerlockchange', ()=>{
   if(document.pointerLockElement===canvas) document.addEventListener('mousemove', onMouseMove);
   else document.removeEventListener('mousemove', onMouseMove);
@@ -325,7 +451,7 @@ function onMouseMove(e){
   camera.rotation.x = pitch;
 }
 
-/* Build scene like your example: ground plane + sky sphere + 4 border walls + flat billboard sprites */
+/* Build scene */
 function buildScene(){
   scene = new THREE.Scene();
 
@@ -357,7 +483,7 @@ function buildScene(){
   );
   scene.add(sky);
 
-  // Walls at borders (like sample)
+  // Walls at borders
   const wTex = new THREE.TextureLoader().load(assets.textures.wall);
   const wMat = new THREE.MeshBasicMaterial({ map: wTex });
   const north = new THREE.Mesh(new THREE.BoxGeometry(WORLD.half*2, WORLD.wallH, WORLD.wallT), wMat); north.position.set(0, WORLD.wallH/2, -WORLD.half); scene.add(north);
@@ -366,7 +492,7 @@ function buildScene(){
   const east  = west.clone(); east.position.x = WORLD.half; scene.add(east);
   walls = [north,south,west,east];
 
-  // Initial spirits (optional: spawn after delay; we'll start with none so it matches "spawn after 10s")
+  // Initial spirits
   spirits = [];
 
   // Resize
@@ -392,14 +518,14 @@ function rightVec(){
   return dir.normalize();
 }
 
-/* Spirit factory - now creates thicker, more visible spirits */
+/* Spirit factory */
 function makeSpirit(){
   const idx = Math.floor(Math.random()*assets.spirits.length);
   const tex = new THREE.TextureLoader().load(assets.spirits[idx]);
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: true, alphaTest: 0.1 });
   
-  // Create a thicker spirit using a BoxGeometry instead of PlaneGeometry
-  const geo = new THREE.BoxGeometry(1.8, 1.8, 0.4); // Wider and thicker than before
+  // Create a thicker spirit
+  const geo = new THREE.BoxGeometry(1.8, 1.8, 0.4);
   const mesh = new THREE.Mesh(geo, mat);
   
   // Position randomly in the field
@@ -409,15 +535,15 @@ function makeSpirit(){
     (Math.random()*2-1)*(WORLD.half-10)
   );
   
-  // Random speed within the increased range
   const speed = SPEED.spiritMin + Math.random()*(SPEED.spiritMax - SPEED.spiritMin);
+  const spawnTime = performance.now();
   scene.add(mesh);
-  return { mesh, speed };
+  return { mesh, speed, spawnTime };
 }
 
 /* Separation so spirits don't overlap */
 function separateSpirits(){
-  const minDist = 2.0; // Slightly increased minimum distance
+  const minDist = 2.0;
   for (let i=0;i<spirits.length;i++){
     for (let j=i+1;j<spirits.length;j++){
       const a = spirits[i].mesh.position, b = spirits[j].mesh.position;
@@ -434,14 +560,14 @@ function separateSpirits(){
   }
 }
 
-/* Boss (kept same mechanic but slightly faster) */
+/* Boss - now bigger and slower */
 function spawnBoss(){
   const tex = new THREE.TextureLoader().load('images/spirits/boss.png', undefined, undefined, ()=>console.warn('Missing boss.png'));
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
-  // Make boss thicker too
-  const geo = new THREE.BoxGeometry(4,4,0.6); 
+  // Increased boss size from 4,4,0.6 to 6,6,1.0
+  const geo = new THREE.BoxGeometry(6,6,1.0); 
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set((Math.random()*2-1)*(WORLD.half-20), 2, (Math.random()*2-1)*(WORLD.half-20));
+  mesh.position.set((Math.random()*2-1)*(WORLD.half-20), 3, (Math.random()*2-1)*(WORLD.half-20)); // Also raised y-position to 3
   scene.add(mesh);
   boss = { mesh, speed: SPEED.boss };
   bossTTL = 30;
@@ -452,16 +578,39 @@ function spawnBoss(){
 
 /* Movement + AI + scoring */
 function update(dt){
-  // Movement (WASD) — relative to look
+  // Movement - handles both keyboard and mobile controls
   let moving = false;
   const accel = new THREE.Vector3();
   const fwd = forwardVec(), right = rightVec();
-  const speed = (keys['ShiftLeft'] || keys['ShiftRight']) ? SPEED.run : SPEED.walk;
+  
+  // Determine speed based on running state
+  let speed;
+  if(joystickActive || isRunning || keys['ShiftLeft'] || keys['ShiftRight']){
+    speed = SPEED.run;
+  } else {
+    speed = SPEED.walk;
+  }
 
+  // Keyboard controls
   if (keys['KeyW']) { accel.add(fwd); moving = true; }
   if (keys['KeyS']) { accel.addScaledVector(fwd, -1); moving = true; }
   if (keys['KeyA']) { accel.addScaledVector(right, -1); moving = true; }
   if (keys['KeyD']) { accel.add(right); moving = true; }
+
+  // Mobile joystick controls
+  if(joystickActive){
+    const joyX = joystickPos.x / 50; // Normalize to -1..1
+    const joyY = joystickPos.y / 50;
+    
+    if(Math.abs(joyY) > 0.1){
+      accel.addScaledVector(fwd, joyY);
+      moving = true;
+    }
+    if(Math.abs(joyX) > 0.1){
+      accel.addScaledVector(right, joyX);
+      moving = true;
+    }
+  }
 
   if (moving){
     accel.normalize().multiplyScalar(speed * dt);
@@ -484,13 +633,34 @@ function update(dt){
     }
   }
 
+  // Handle spirit despawning and respawning
+  const now = performance.now();
+  for(let i = spirits.length - 1; i >= 0; i--){
+    const spirit = spirits[i];
+    const aliveTime = (now - spirit.spawnTime) / 1000; // in seconds
+    
+    // Random despawn time between 45-50 seconds
+    const despawnTime = SPAWN.despawnMin + Math.random() * (SPAWN.despawnMax - SPAWN.despawnMin);
+    
+    if(aliveTime > despawnTime){
+      // Despawn this spirit
+      scene.remove(spirit.mesh);
+      spirits.splice(i, 1);
+      
+      // Immediately spawn a new one somewhere else
+      if(spirits.length < SPAWN.max){
+        spirits.push(makeSpirit());
+      }
+    }
+  }
+
   // Spirits chase + face camera
   let anyNear = false;
   const p = player.position;
   for (const s of spirits){
     const pos = s.mesh.position;
     
-    // Make spirits face the player (but keep their thickness visible)
+    // Make spirits face the player
     s.mesh.lookAt(new THREE.Vector3(p.x, pos.y, p.z));
     
     const dx = p.x - pos.x, dz = p.z - pos.z;
@@ -499,9 +669,9 @@ function update(dt){
     pos.x += (dx/dist) * step;
     pos.z += (dz/dist) * step;
     clampToField(pos);
-    if (dist < 2.5) anyNear = true; // Slightly increased near distance
+    if (dist < 2.5) anyNear = true;
     
-    // hit player? (using the thicker collision detection)
+    // hit player?
     if (dist < (PLAYER.radius + 1.2)) { onGameOver(); return; }
   }
   separateSpirits();
@@ -509,14 +679,15 @@ function update(dt){
   // Boss chase
   if (boss){
     const b = boss.mesh.position;
-    boss.mesh.lookAt(new THREE.Vector3(p.x, b.y, p.z)); // Make boss face player but maintain height
+    boss.mesh.lookAt(new THREE.Vector3(p.x, b.y, p.z));
     
     const dx = p.x - b.x, dz = p.z - b.z;
     const dist = Math.hypot(dx, dz) || 0.0001;
     const step = boss.speed * dt;
-    b.x += (dx/dist) * step; b.z += (dz/dist) * step;
+    b.x += (dx/dist) * step; 
+    b.z += (dz/dist) * step;
     clampToField(b);
-    if (dist < (PLAYER.radius + 2.0)) { onGameOver(); return; } // Slightly larger boss hit radius
+    if (dist < (PLAYER.radius + 3.0)) { onGameOver(); return; } // Increased hit radius for bigger boss
     bossTTL -= dt;
     $('#bossFill').style.width = Math.max(0,(bossTTL/30)*100) + '%';
     if (bossTTL <= 0){
@@ -535,7 +706,7 @@ function update(dt){
   // Score + boss trigger
   scoreAcc += dt;
   if (scoreAcc >= 1){ score += 1; scoreAcc = 0; $('#scoreBox').textContent = `Score: ${score}`; }
-  if (!boss && score>0 && score % 100 === 0){ spawnBoss(); } // Changed from 1000 to 100
+  if (!boss && score>0 && score % 100 === 0){ spawnBoss(); }
 }
 
 /* Game loop */
@@ -563,6 +734,10 @@ function startGame(){
   running = true;
   lastT = performance.now();
   if (toggles.play.checked){ audio.play.currentTime=0; tryPlay(audio.play, true); }
+  
+  // Setup mobile controls
+  setupMobileControls();
+  
   requestAnimationFrame(animate);
 }
 
