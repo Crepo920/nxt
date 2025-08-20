@@ -27,6 +27,7 @@
   .btn.secondary{color:#071018; background:linear-gradient(135deg,#62a0ff,#b3d3ff)}
   .btn.danger{color:#18040a; background:linear-gradient(135deg,#ff5da8,#ffc2dc)}
   .foot{margin-top:8px; text-align:center; font-size:12px; color:var(--muted)}
+  .fullscreen-btn{display:none; margin-top:8px}
 
   /* SETTINGS / CREDITS / LOADING / GAME styles */
   #settings{background:linear-gradient(180deg,var(--bg),var(--bg2)); padding:24px}
@@ -36,6 +37,9 @@
   .toggle:checked{background:linear-gradient(135deg,var(--accent),#5dffe7)}
   .toggle::after{content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; transition:.2s}
   .toggle:checked::after{left:27px}
+  .slider{width:120px; height:8px; -webkit-appearance:none; background:#22313f; border-radius:4px; outline:none}
+  .slider::-webkit-slider-thumb{-webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:var(--accent); cursor:pointer}
+  .control-desc{font-size:12px; color:var(--muted); margin-top:4px; display:none}
 
   #credits{background:#000; color:#fff; padding:20px; overflow:auto}
   .credits-wrap{width:min(800px,94%); margin:40px auto; line-height:1.6}
@@ -62,18 +66,30 @@
 
   #gameover{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.7); z-index:60; text-align:center; padding:20px}
   .go-card{background:#0c1218; border-radius:20px; padding:24px; width:min(520px,94%)}
-  .go-title{font-weight:900; color:var(--warn); text-transform:uppercase; font-size:28px; letter-spacing:1px}
+  .go-title{font-weight:900; color:var(--warn); text-transform:uppercase; font-size:28px; letter-spacing:1px; 
+            text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            font-family: 'Courier New', monospace;}
+  .go-meta{color:var(--fg); font-size:18px; margin-top:10px; font-weight:bold}
 
   /* Mobile Controls */
   .mobile-controls{position:fixed; bottom:20px; left:0; right:0; display:none; justify-content:space-between; padding:0 20px; z-index:30; pointer-events:none}
-  .joystick-area{width:120px; height:120px; position:relative; pointer-events:auto}
-  .joystick{width:60px; height:60px; background:rgba(255,255,255,0.3); border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none}
-  .look-area{width:50%; height:200px; position:absolute; right:0; pointer-events:auto}
-  .run-btn{width:80px; height:80px; background:rgba(255,255,255,0.3); border-radius:50%; position:absolute; right:20px; bottom:140px; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; pointer-events:auto}
+  .joystick-area{width:120px; height:120px; position:relative; pointer-events:auto; touch-action:none}
+  .joystick{width:60px; height:60px; background:rgba(255,255,255,0.5); border-radius:50%; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; border:2px solid rgba(255,255,255,0.8)}
+  .look-area{width:50%; height:200px; position:absolute; right:0; pointer-events:auto; touch-action:none}
+  .run-btn{width:70px; height:70px; background:rgba(0,255,209,0.3); border-radius:50%; position:absolute; right:20px; bottom:140px; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; pointer-events:auto; border:2px solid rgba(0,255,209,0.7)}
+  .run-btn.active{background:rgba(0,255,209,0.7)}
 
   /* Splash small fade */
   #splash.fadeout{animation: fadeout .8s ease forwards}
   @keyframes fadeout { to{ opacity:0; visibility:hidden } }
+  
+  /* Game Over Animation */
+  #gameover.fadeout {animation: fadeout .8s ease forwards}
+  
+  @media (max-width: 768px) {
+    .fullscreen-btn{display:block}
+    .control-desc{display:block}
+  }
 </style>
 </head>
 <body>
@@ -92,6 +108,7 @@
       <button id="playBtn" class="btn">Play</button>
       <button id="settingsBtn" class="btn secondary">Settings</button>
       <button id="creditsBtn" class="btn danger">Credits</button>
+      <button id="fullscreenBtn" class="btn fullscreen-btn">Full Screen</button>
     </div>
     <div class="foot">Best experienced in full-screen • Headphones recommended</div>
   </div>
@@ -106,6 +123,11 @@
     <div class="row"><span>Boss Music (boss.mp3)</span><input id="tgBoss" type="checkbox" class="toggle" /></div>
     <div class="row"><span>Chase Sound (cs.mp3)</span><input id="tgChase" type="checkbox" class="toggle" /></div>
     <div class="row"><span>FX: Death/Steps/GameOver</span><input id="tgFX" type="checkbox" class="toggle" /></div>
+    <div class="row mobile-only">
+      <span>Look Sensitivity</span>
+      <input id="sensitivity" type="range" min="1" max="10" value="5" class="slider" />
+    </div>
+    <div class="control-desc mobile-only">Left side: Virtual joystick for movement | Right side: Touch to look around | RUN button: Hold to sprint</div>
     <div style="display:flex;gap:10px;margin-top:14px">
       <button id="backHome1" class="btn secondary" style="flex:1">Back</button>
       <button id="resetSettings" class="btn danger" style="flex:1">Reset</button>
@@ -218,6 +240,13 @@ const audio = {
 };
 const toggles = { home: $('#tgHome'), play: $('#tgPlay'), boss: $('#tgBoss'), chase: $('#tgChase'), fx: $('#tgFX') };
 
+// Check if mobile device
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+if (isMobile) {
+  $$('.mobile-only').forEach(el => el.style.display = 'flex');
+  $('#fullscreenBtn').style.display = 'block';
+}
+
 function tryPlay(a, allow){ if (!allow) return; a.play().catch(()=>{}); }
 function tryPause(a){ try{ a.pause(); }catch(e){} }
 
@@ -242,12 +271,21 @@ function loadSettings(){
   toggles.boss.checked = d.boss ?? true;
   toggles.chase.checked = d.chase ?? true;
   toggles.fx.checked = d.fx ?? true;
+  $('#sensitivity').value = d.sensitivity ?? 5;
 }
 function saveSettings(){
-  const d = { home: toggles.home.checked, play: toggles.play.checked, boss: toggles.boss.checked, chase: toggles.chase.checked, fx: toggles.fx.checked };
+  const d = { 
+    home: toggles.home.checked, 
+    play: toggles.play.checked, 
+    boss: toggles.boss.checked, 
+    chase: toggles.chase.checked, 
+    fx: toggles.fx.checked,
+    sensitivity: $('#sensitivity').value
+  };
   localStorage.setItem(LS_SETTINGS, JSON.stringify(d));
 }
 $$('.toggle').forEach(t => t.addEventListener('change', saveSettings));
+$('#sensitivity').addEventListener('change', saveSettings);
 $('#resetSettings').addEventListener('click', ()=>{ localStorage.removeItem(LS_SETTINGS); loadSettings(); applyMusicState(); });
 
 function getHS(){ return JSON.parse(localStorage.getItem(LS_HS) || '{"name":"","score":0}'); }
@@ -342,13 +380,14 @@ let joystickStart = {x:0, y:0};
 let lookActive = false;
 let lookStart = {x:0, y:0};
 let isRunning = false;
+let lookSensitivity = 5;
 
 function setupMobileControls(){
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   if(isMobile){
     $('#mobileControls').style.display = 'flex';
+    lookSensitivity = $('#sensitivity').value;
     
-    // Joystick for movement
+    // Joystick for movement - fixed controls
     $('#joystickArea').addEventListener('touchstart', (e)=>{
       joystickActive = true;
       const rect = e.target.getBoundingClientRect();
@@ -356,49 +395,50 @@ function setupMobileControls(){
       e.preventDefault();
     });
     
-    document.addEventListener('touchmove', (e)=>{
+    $('#joystickArea').addEventListener('touchmove', (e)=>{
       if(joystickActive){
         const touch = e.touches[0];
         joystickPos = {
-          x: touch.clientX - joystickStart.x,
-          y: touch.clientY - joystickStart.y
+          x: (touch.clientX - joystickStart.x) / 50, // Normalized movement
+          y: (touch.clientY - joystickStart.y) / 50
         };
+        
         // Limit joystick movement
         const dist = Math.sqrt(joystickPos.x*joystickPos.x + joystickPos.y*joystickPos.y);
-        const maxDist = 50;
-        if(dist > maxDist){
-          joystickPos.x = joystickPos.x * maxDist / dist;
-          joystickPos.y = joystickPos.y * maxDist / dist;
+        if(dist > 1){
+          joystickPos.x = joystickPos.x / dist;
+          joystickPos.y = joystickPos.y / dist;
         }
-        $('#joystick').style.transform = `translate(calc(-50% + ${joystickPos.x}px), calc(-50% + ${joystickPos.y}px)`;
+        
+        // Update joystick visual position
+        $('#joystick').style.transform = `translate(calc(-50% + ${joystickPos.x * 40}px), calc(-50% + ${joystickPos.y * 40}px)`;
         e.preventDefault();
       }
     });
     
-    document.addEventListener('touchend', (e)=>{
-      if(joystickActive){
-        joystickActive = false;
-        joystickPos = {x:0, y:0};
-        $('#joystick').style.transform = 'translate(-50%, -50%)';
-      }
+    $('#joystickArea').addEventListener('touchend', (e)=>{
+      joystickActive = false;
+      joystickPos = {x:0, y:0};
+      $('#joystick').style.transform = 'translate(-50%, -50%)';
+      e.preventDefault();
     });
     
-    // Look controls
+    // Look controls - fixed with sensitivity
     $('#lookArea').addEventListener('touchstart', (e)=>{
       lookActive = true;
       lookStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
       e.preventDefault();
     });
     
-    document.addEventListener('touchmove', (e)=>{
+    $('#lookArea').addEventListener('touchmove', (e)=>{
       if(lookActive && e.touches.length > 0){
         const touch = e.touches[0];
-        const dx = touch.clientX - lookStart.x;
-        const dy = touch.clientY - lookStart.y;
+        const dx = (touch.clientX - lookStart.x) * (lookSensitivity / 500);
+        const dy = (touch.clientY - lookStart.y) * (lookSensitivity / 500);
         
         // Update camera rotation
-        yaw -= dx * 0.002;
-        pitch -= dy * 0.002;
+        yaw -= dx;
+        pitch -= dy;
         pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
         player.rotation.y = yaw;
         camera.rotation.x = pitch;
@@ -408,18 +448,21 @@ function setupMobileControls(){
       }
     });
     
-    document.addEventListener('touchend', (e)=>{
+    $('#lookArea').addEventListener('touchend', (e)=>{
       lookActive = false;
+      e.preventDefault();
     });
     
-    // Run button
+    // Run button - fixed functionality
     $('#runBtn').addEventListener('touchstart', (e)=>{
       isRunning = true;
+      $('#runBtn').classList.add('active');
       e.preventDefault();
     });
     
     $('#runBtn').addEventListener('touchend', (e)=>{
       isRunning = false;
+      $('#runBtn').classList.remove('active');
       e.preventDefault();
     });
   }
@@ -585,7 +628,7 @@ function update(dt){
   
   // Determine speed based on running state
   let speed;
-  if(joystickActive || isRunning || keys['ShiftLeft'] || keys['ShiftRight']){
+  if(isRunning || keys['ShiftLeft'] || keys['ShiftRight']){
     speed = SPEED.run;
   } else {
     speed = SPEED.walk;
@@ -597,17 +640,15 @@ function update(dt){
   if (keys['KeyA']) { accel.addScaledVector(right, -1); moving = true; }
   if (keys['KeyD']) { accel.add(right); moving = true; }
 
-  // Mobile joystick controls
+  // Mobile joystick controls - FIXED DIRECTION
   if(joystickActive){
-    const joyX = joystickPos.x / 50; // Normalize to -1..1
-    const joyY = joystickPos.y / 50;
-    
-    if(Math.abs(joyY) > 0.1){
-      accel.addScaledVector(fwd, joyY);
+    // Fixed: Now properly maps joystick movement to game movement
+    if(Math.abs(joystickPos.y) > 0.1){
+      accel.addScaledVector(fwd, -joystickPos.y); // Fixed direction
       moving = true;
     }
-    if(Math.abs(joyX) > 0.1){
-      accel.addScaledVector(right, joyX);
+    if(Math.abs(joystickPos.x) > 0.1){
+      accel.addScaledVector(right, joystickPos.x); // Fixed direction
       moving = true;
     }
   }
@@ -774,6 +815,28 @@ function onGameOver(){
   }
   $('#goMeta').textContent = `Score: ${score}`;
   $('#gameover').style.display = 'flex';
+  
+  // Fade out after 3 seconds
+  setTimeout(() => {
+    $('#gameover').classList.add('fadeout');
+    setTimeout(() => {
+      $('#gameover').style.display = 'none';
+      $('#gameover').classList.remove('fadeout');
+    }, 800);
+  }, 3000);
+}
+
+/* Fullscreen function */
+function toggleFullScreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      console.log(`Error attempting to enable full-screen mode: ${err.message}`);
+    });
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
 }
 
 /* UI Bindings */
@@ -786,6 +849,7 @@ $('#againBtn').addEventListener('click', ()=>{ $('#gameover').style.display='non
 $('#homeBtn').addEventListener('click', ()=>{ $('#gameover').style.display='none'; stopGame(); show('home'); });
 $('#exitBtn').addEventListener('click', ()=>{ stopGame(); show('home'); });
 $('#pauseBtn').addEventListener('click', ()=> alert('Game paused. Tap OK to resume.'));
+$('#fullscreenBtn').addEventListener('click', toggleFullScreen);
 
 loadSettings();
 updateHSBlock();
